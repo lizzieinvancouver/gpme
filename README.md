@@ -1,0 +1,3 @@
+# A repo to help learn Gaussian Process (GP) me
+
+Started 23 April 2026...
