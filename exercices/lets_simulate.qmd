@@ -1,0 +1,116 @@
+---
+title: "Learning GPs"
+format: html
+---
+
+### Simulate data from a GP! 
+
+Everything is well explained in Mike's case study, but the following code will give you some ideas how to generate functional behaviors from a GP in practice.
+
+#### The covariance function
+
+Here we focus on the exponentiated quadratic covariance function, that can be written in R as:
+
+```{r}
+set.seed(12345)
+
+k <- function(delta_x, gamma, rho){
+  return(gamma^2*exp(-1/2*(delta_x/rho)^2))
+}
+```
+
+Which allows to plot a covariogram like this (see Mike's case study):
+
+```{r}
+
+delta_x <- seq(0, 10, 0.5)
+plot(x = delta_x,
+     y = k(delta_x, gamma = 1, rho = 4), type = 'l',
+     bty = 'n', col = "#487575",
+     xlab = expression(Delta*'x'), ylab = 'Covariance')
+
+```
+
+#### From covariance to sampling
+
+With a finite number of covariate values for which we want to make predictions, the finite-dimensional projection of a GP essentially become a multinormal distribution. The covariance matrix of this distribution is determined by the covariance function.
+
+For example, let's say we have a grid 10 points evenly distributed fromn 1 to 10. We can compute a distance matrix as follows:
+
+```{r}
+
+grid <- data.frame(x1 = seq(1,10,1), x2 = seq(1,10,1))
+dmat <- as.matrix(dist(grid, diag = T, upper = T))
+
+print(round(dmat, 2))
+
+```
+
+It becomes then straightforward to apply the covariance function to this matrix, for the grid of points we consider:
+
+
+```{r}
+
+cov <- apply(dmat, 1:2, k, gamma = 1, rho = 7)
+
+print(round(cov, 2))
+
+```
+
+Using this covariance matrix, we can then simulate some GP functional behaviors along this grid:
+
+```{r}
+
+f <- MASS::mvrnorm(20, rep(0,10), cov)
+
+plot(x = seq(1,10,1), y = f[1,], 
+     type = 'l', bty = 'n', col = "#B97C7C",
+     ylim = c(-3,3), xlim = c(1,10),
+     xlab = 'x', ylab = 'f(x)')
+for(i in 2:20){
+  lines(x = seq(1,10,1), y = f[i,], col = "#B97C7C")
+}
+
+
+```
+
+We can repeat the process with different parameters for the covariance function:
+
+```{r}
+
+cov <- apply(dmat, 1:2, k, gamma = 2, rho = 1.5)
+f <- MASS::mvrnorm(20, rep(0,10), cov)
+
+plot(x = seq(1,10,1), y = f[1,], 
+     type = 'l', bty = 'n', col = "#B97C7C",
+     ylim = c(-6,6), xlim = c(1,10),
+     xlab = 'x', ylab = 'f(x)')
+for(i in 2:20){
+  lines(x = seq(1,10,1), y = f[i,], col = "#B97C7C")
+}
+
+
+```
+
+This looks a bit discontinuous as we sampled only a grid of 10 points.\
+If we increase the resolution of the grid, we obtain something smoother.
+
+```{r}
+n <- 1000
+
+grid <- data.frame(x1 = seq(1,10, length.out = n), x2 = seq(1,10, length.out = n))
+dmat <- as.matrix(dist(grid, diag = T, upper = T))
+
+cov <- apply(dmat, 1:2, k, gamma = 2, rho = 1.5)
+f <- MASS::mvrnorm(20, rep(0,n), cov)
+
+plot(x = seq(1,10, length.out = n), y = f[1,], 
+     type = 'l', bty = 'n', col = "#B97C7C",
+     ylim = c(-6,6), xlim = c(1,10),
+     xlab = 'x', ylab = 'f(x)')
+for(i in 2:20){
+  lines(x = seq(1,10, length.out = n), y = f[i,], col = "#B97C7C")
+}
+
+
+```
