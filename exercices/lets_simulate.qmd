@@ -114,3 +114,43 @@ for(i in 2:20){
 
 
 ```
+
+#### Simulate observations that arise from a GP
+
+What if we have a normal observational model with a variance $\sigma^2$? Let's say that the functional relationship between our observations is the following GP:
+
+```{r}
+n <- 1000
+
+grid <- data.frame(x1 = seq(1,10, length.out = n), x2 = seq(1,10, length.out = n))
+dmat <- as.matrix(dist(grid, diag = T, upper = T))
+
+cov <- apply(dmat, 1:2, k, gamma = 1.7, rho = 2.7)
+f <- MASS::mvrnorm(1, rep(0,n), cov)
+
+plot(x = seq(1,10, length.out = n), y = f, 
+     type = 'l', bty = 'n', col = "#B97C7C",
+     ylim = c(-6,6), xlim = c(1,10),
+     xlab = 'x', ylab = 'f(x)')
+
+```
+
+We can then simulate observations with a measurement error $\sigma$:
+
+```{r}
+
+# for 13 observations
+idxs <- sample(1:n, 13)
+x <- seq(1,10, length.out = n)[idxs] 
+fx <- f[idxs]
+
+y <- rnorm(13, fx, sd = 1)
+
+plot(x = seq(1,10, length.out = n), y = f, 
+     type = 'l', bty = 'n', col = "#B97C7C",
+     ylim = c(-6,6), xlim = c(1,10),
+     xlab = 'x', ylab = 'f(x)')
+points(x = x, y = y,
+       pch = 20, col = "#8F2727")
+
+```
