@@ -3,7 +3,7 @@ title: "Learning GPs"
 format: html
 ---
 
-```{r, echo = FALSE}
+```{r, echo = FALSE, message = FALSE}
 util <- new.env()
 source('mcmc_analysis_tools_rstan.R', local=util)
 source('mcmc_visualization_tools.R', local=util)
@@ -12,7 +12,7 @@ par(mar = c(4,4,1,1))
 
 ### Simulate data from a GP! 
 
-Everything is well explained in Mike's case study, but the following code will give you some ideas how to generate functional behaviors from a GP in practice.
+Everything is well explained in Mike's case study, but the following code will give you some ideas how to generate functional behaviors from a GP in practice, and then how to fit a GP!
 
 #### The covariance function
 
@@ -290,7 +290,7 @@ points(data$x_obs, data$y_obs, pch=16, cex=0.5, col="black")
 Or against the 'true' GP functional behavior:
 
 ```{r}
-names <- paste0('y_pred[',1:data$N_pred,']')
+names <- paste0('f_pred[',1:data$N_pred,']')
 util$plot_conn_pushforward_quantiles(samples, names, data$x_pred)
 
 lines(seq(1,10, length.out = n), f, lwd = 5, col = 'white')
