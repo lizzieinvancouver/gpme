@@ -3,6 +3,13 @@ title: "Learning GPs"
 format: html
 ---
 
+```{r, echo = FALSE}
+util <- new.env()
+source('mcmc_analysis_tools_rstan.R', local=util)
+source('mcmc_visualization_tools.R', local=util)
+par(mar = c(4,4,1,1))
+```
+
 ### Simulate data from a GP! 
 
 Everything is well explained in Mike's case study, but the following code will give you some ideas how to generate functional behaviors from a GP in practice.
@@ -125,7 +132,10 @@ n <- 1000
 grid <- data.frame(x1 = seq(1,10, length.out = n), x2 = seq(1,10, length.out = n))
 dmat <- as.matrix(dist(grid, diag = T, upper = T))
 
-cov <- apply(dmat, 1:2, k, gamma = 1.7, rho = 2.7)
+rho_sim <- 2.7
+gamma_sim <- 1.7
+
+cov <- apply(dmat, 1:2, k, gamma = gamma_sim, rho = rho_sim)
 f <- MASS::mvrnorm(1, rep(0,n), cov)
 
 plot(x = seq(1,10, length.out = n), y = f, 
@@ -138,13 +148,15 @@ plot(x = seq(1,10, length.out = n), y = f,
 We can then simulate observations with a measurement error $\sigma$:
 
 ```{r}
+nobs <- 27
 
-# for 13 observations
-idxs <- sample(1:n, 13)
+sigma_sim <- 1
+
+idxs <- sample(1:n, nobs)
 x <- seq(1,10, length.out = n)[idxs] 
 fx <- f[idxs]
 
-y <- rnorm(13, fx, sd = 1)
+y <- rnorm(nobs, fx, sd = sigma_sim)
 
 plot(x = seq(1,10, length.out = n), y = f, 
      type = 'l', bty = 'n', col = "#B97C7C",
@@ -152,5 +164,162 @@ plot(x = seq(1,10, length.out = n), y = f,
      xlab = 'x', ylab = 'f(x)')
 points(x = x, y = y,
        pch = 20, col = "#8F2727")
+
+```
+
+### Fitting our first GP!
+
+Below, the Stan code written by Mike (+ some priors...):
+
+```{stan, output.var = 'firstgp.stan', eval = FALSE}
+
+functions {
+  vector gp_pred_rng(real[] x2,
+                     vector y1, real[] x1,
+                     real alpha, real rho, real sigma, real delta) {
+    int N1 = rows(y1);
+    int N2 = size(x2);
+    vector[N2] f2;
+    {
+      matrix[N1, N1] K =   cov_exp_quad(x1, alpha, rho)
+                         + diag_matrix(rep_vector(square(sigma), N1));
+      matrix[N1, N1] L_K = cholesky_decompose(K);
+
+      vector[N1] L_K_div_y1 = mdivide_left_tri_low(L_K, y1);
+      vector[N1] K_div_y1 = mdivide_right_tri_low(L_K_div_y1', L_K)';
+      matrix[N1, N2] k_x1_x2 = cov_exp_quad(x1, x2, alpha, rho);
+      vector[N2] f2_mu = (k_x1_x2' * K_div_y1);
+      matrix[N1, N2] v_pred = mdivide_left_tri_low(L_K, k_x1_x2);
+      matrix[N2, N2] cov_f2 =   cov_exp_quad(x2, alpha, rho) - v_pred' * v_pred
+                              + diag_matrix(rep_vector(delta, N2));
+      f2 = multi_normal_rng(f2_mu, cov_f2);
+    }
+    return f2;
+  }
+}
+
+data {
+  int<lower=1> N_obs;
+  real x_obs[N_obs];
+  vector[N_obs] y_obs;
+  
+  int<lower=1> N_pred;
+  real x_pred[N_pred];
+}
+
+parameters {
+  real<lower=0> rho;
+  real<lower=0> gamma;
+  real<lower=0> sigma;
+}
+
+model {
+  matrix[N_obs, N_obs] cov =   cov_exp_quad(x_obs, gamma, rho)
+                             + diag_matrix(rep_vector(square(sigma), N_obs));
+  matrix[N_obs, N_obs] L_cov = cholesky_decompose(cov);
+  
+  gamma ~ normal(0,1);
+  rho ~ normal(5, 2);
+  sigma ~ normal(0,1);
+
+  y_obs ~ multi_normal_cholesky(rep_vector(0, N_obs), L_cov);
+}
+
+generated quantities {
+  vector[N_pred] f_pred = gp_pred_rng(x_pred, y_obs, x_obs, gamma, rho, sigma, 1e-10);
+  real y_pred[N_pred] = normal_rng(f_pred, sigma);
+}
+
+
+```
+
+```{r, echo = FALSE}
+
+library(rstan)
+rstan_options(auto_write = TRUE)
+
+
+```
+
+Let's fit the data we simulated!
+
+```{r}
+
+data <- list(
+  N_obs = nobs,
+  x_obs = x,
+  y_obs = y,
+  
+  N_pred = 100,
+  x_pred = seq(1, 10, length.out = 100)
+)
+
+gp_model <- stan_model('stan/firstgp.stan')
+fit <- sampling(gp_model, data = data,
+                chains = 4, cores = 4)
+
+# samples <- util$extract_expectand_vals(fit)
+# util$plot_expectand_pushforward(samples[['rho']], 20,
+#                                 display_name = 'rho',
+#                                 flim = c(1, 10))
+
+```
+
+Now we check the diagnostics:
+
+```{r}
+
+diagnostics <- util$extract_hmc_diagnostics(fit)
+util$check_all_hmc_diagnostics(diagnostics)
+
+samples <- util$extract_expectand_vals(fit)
+base_samples <- util$filter_expectands(samples,
+                                       c('rho', 'gamma', 'sigma'))
+util$check_all_expectand_diagnostics(base_samples)
+```
+
+Now we check the predictions from the model (retrodictive checks!):
+
+```{r}
+names <- paste0('y_pred[',1:data$N_pred,']')
+util$plot_conn_pushforward_quantiles(samples, names, data$x_pred)
+points(data$x_obs, data$y_obs, pch=16, cex=1, col="white")
+points(data$x_obs, data$y_obs, pch=16, cex=0.5, col="black")
+```
+
+Or against the 'true' GP functional behavior:
+
+```{r}
+names <- paste0('y_pred[',1:data$N_pred,']')
+util$plot_conn_pushforward_quantiles(samples, names, data$x_pred)
+
+lines(seq(1,10, length.out = n), f, lwd = 5, col = 'white')
+lines(seq(1,10, length.out = n), f, lwd = 2, col = 'black')
+```
+
+Satisfied by the retrodictive checks, we can look at the parameter inferences.
+The red lines are the posterior distributions. The blue lines represent the prior distributions, the dashed vertical lines represent the 'true' values of the parameters.
+
+```{r}
+
+par(mfrow = c(2,2), mar = c(4,4,1,1))
+
+util$plot_expectand_pushforward(samples[['rho']], 30, flim = c(0, 10),
+                                display_name = expression('rho'))
+prior <- rnorm(1e6, 5, 2)
+lines(density(prior), col = util$c_light_teal, lwd = 1.5)
+abline(v = rho_sim, lwd = 2, lty = 2, col = 'grey30')
+
+util$plot_expectand_pushforward(samples[['gamma']], 30, flim = c(0, 5),
+                                display_name = expression('gamma'))
+prior <- rnorm(1e6, 0, 1)
+lines(density(prior), col = util$c_light_teal, lwd = 1.5)
+abline(v = gamma_sim, lwd = 2, lty = 2, col = 'grey30')
+
+util$plot_expectand_pushforward(samples[['sigma']], 30, flim = c(0, 3),
+                                display_name = expression('sigma'))
+prior <- rnorm(1e6, 0, 1)
+lines(density(prior), col = util$c_light_teal, lwd = 1.5)
+abline(v = sigma_sim, lwd = 2, lty = 2, col = 'grey30')
 
 ```
