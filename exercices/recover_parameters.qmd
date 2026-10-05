@@ -1,0 +1,61 @@
+---
+title: "Can you recover the parameters?"
+format: html
+---
+  
+```{r, echo = FALSE, message = FALSE}
+util <- new.env()
+source('mcmc_analysis_tools_rstan.R', local=util)
+source('mcmc_visualization_tools.R', local=util)
+par(mar = c(4,4,1,1))
+```
+
+### Load data and visualize
+
+The dataset contains two trees.
+
+```{r}
+
+data_trees <- readRDS('input/fake_data.rds')
+
+plot(x = data_trees[data_trees$tree == 'tree1', 'years'], 
+     y = data_trees[data_trees$tree == 'tree1', 'rw_mm'], 
+     bty = 'n', col = "#B97C7C",
+     ylim = c(0,1.5), xlim = range(1981,2020),
+     xlab = 'Years', ylab = 'Ring width (mm)', pch = 20)
+
+plot(x = data_trees[data_trees$tree == 'tree2', 'years'], 
+     y = data_trees[data_trees$tree == 'tree2', 'rw_mm'], 
+     bty = 'n', col = "#B97C7C",
+     ylim = c(0,1.5), xlim = range(1981,2020),
+     xlab = 'Years', ylab = 'Ring width (mm)', pch = 20)
+
+
+hist(data_trees$rw_mm, main = '',
+     col =  "#B97C7C", border = "white",
+     xlab = 'Ringwidth (mm)')
+
+
+```
+
+And some climate data.
+
+
+```{r}
+
+data_trees <- readRDS('input/fake_data.rds')
+
+plot(x = data_trees[data_trees$tree == 'tree1', 'years'], 
+     y = data_trees[data_trees$tree == 'tree1', 'gdd'], 
+     bty = 'n', col = "#B97C7C",
+     xlim = range(1981,2020), ylim = c(15,35),
+     xlab = 'Years', ylab = 'Growing degree-days (x100 degC)', pch = 20)
+
+plot(x = data_trees[data_trees$tree == 'tree1', 'years'], 
+     y = data_trees[data_trees$tree == 'tree1', 'vpd'], 
+     bty = 'n', col = "#B97C7C",
+     xlim = range(1981,2020), ylim = c(20,35),
+     xlab = 'Years', ylab = 'VPD (hPa)', pch = 20)
+
+
+```
