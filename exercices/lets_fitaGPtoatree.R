@@ -12,6 +12,9 @@ if(length(grep("lizzie", getwd()) > 0)) {
 }
 
 library(rstan)
+source("mcmc_analysis_tools_rstan.R")
+source("mcmc_visualization_tools.R")
+
 
 d <- read.csv("input/piedtree30.csv")
 d2 <- d[which(d$core==2),]
@@ -35,5 +38,15 @@ data <- list(
 modelhere <- stan_model('stan/onetreegp.stan')
 fit <- sampling(modelhere, data = data, chains = 4, cores = 4)
 
-# diagnostics <- util$extract_hmc_diagnostics(fit)
-# util$check_all_hmc_diagnostics(diagnostics)
+diagnostics <- util$extract_hmc_diagnostics(fit)
+util$check_all_hmc_diagnostics(diagnostics)
+
+samples <- util$extract_expectand_vals(fit)
+base_samples <- util$filter_expectands(samples, c('rho', 'gamma', 'sigma'))
+util$check_all_expectand_diagnostics(base_samples)
+
+names <- paste0('y_pred[',1:data$N_pred,']')
+# error below ...
+util$plot_conn_pushforward_quantiles(samples, names, data$x_pred)
+points(data$x_obs, data$y_obs, pch=16, cex=1, col="white")
+points(data$x_obs, data$y_obs, pch=16, cex=0.5, col="black")
